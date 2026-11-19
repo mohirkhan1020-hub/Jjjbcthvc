@@ -1,6 +1,16 @@
 import 'package:flutter/material.dart';
+import 'package:camera/camera.dart';
+import 'dart:io';
 
-void main() {
+List<CameraDescription> cameras = [];
+
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  try {
+    cameras = await availableCameras();
+  } on CameraException catch (e) {
+    print('Error in fetching the cameras: $e');
+  }
   runApp(const MyApp());
 }
 
@@ -11,142 +21,181 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       debugShowCheckedModeBanner: false,
-      title: 'My To-Do App',
-      theme: ThemeData(
-        colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepPurple),
-        useMaterial3: true,
+      theme: ThemeData.dark().copyWith(
+        scaffoldBackgroundColor: Colors.black, // Honour এর মতো কালো থিম
       ),
-      home: const TodoScreen(),
+      home: const CameraScreen(),
     );
   }
 }
 
-class TodoScreen extends StatefulWidget {
-  const TodoScreen({super.key});
+class CameraScreen extends StatefulWidget {
+  const CameraScreen({super.key});
 
   @override
-  State<TodoScreen> createState() => _TodoScreenState();
+  State<CameraScreen> createState() => _CameraScreenState();
 }
 
-class _TodoScreenState extends State<TodoScreen> {
-  // টাস্কের লিস্ট রাখার জন্য
-  final List<Map<String, dynamic>> _tasks = [];
-  // ইনপুট নেওয়ার জন্য কন্ট্রোলার
-  final TextEditingController _textController = TextEditingController();
+class _CameraScreenState extends State<CameraScreen> {
+  CameraController? _controller;
+  XFile? _imageFile;
 
-  // নতুন টাস্ক যোগ করার ফাংশন
-  void _addTask() {
-    if (_textController.text.isNotEmpty) {
-      setState(() {
-        _tasks.add({
-          'title': _textController.text,
-          'isDone': false, // শুরুতে কাজটি অসম্পূর্ণ থাকবে
-        });
+  @override
+  void initState() {
+    super.initState();
+    // অ্যাপ ওপেন হলেই পেছনের ক্যামেরা চালু হবে
+    if (cameras.isNotEmpty) {
+      _controller = CameraController(
+        cameras[0], 
+        ResolutionPreset.high,
+      );
+      _controller!.initialize().then((_) {
+        if (!mounted) return;
+        setState(() {});
       });
-      _textController.clear(); // লেখা মুছে ফেলা
     }
   }
 
-  // টাস্ক ডিলিট করার ফাংশন
-  void _deleteTask(int index) {
-    setState(() {
-      _tasks.removeAt(index);
-    });
+  @override
+  void dispose() {
+    _controller?.dispose();
+    super.dispose();
+  }
+
+  // ছবি তোলার ফাংশন
+  Future<void> _takePicture() async {
+    if (!_controller!.value.isInitialized) return;
+
+    try {
+      final XFile picture = await _controller!.takePicture();
+      setState(() {
+        _imageFile = picture;
+      });
+    } catch (e) {
+      print(e);
+    }
   }
 
   @override
   Widget build(BuildContext context) {
+    // ক্যামেরা চালু না হওয়া পর্যন্ত লোডিং দেখাবে
+    if (_controller == null || !_controller!.value.isInitialized) {
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
+      );
+    }
+
     return Scaffold(
-      appBar: AppBar(
-        title: const Text(
-          'আমার ডেইলি টাস্ক',
-          style: TextStyle(fontWeight: FontWeight.bold),
-        ),
-        backgroundColor: Colors.deepPurple,
-        foregroundColor: Colors.white,
-        centerTitle: true,
-      ),
-      body: Column(
+      body: Stack(
         children: [
-          // টাস্ক ইনপুট দেওয়ার জায়গা
-          Padding(
-            padding: const EdgeInsets.all(16.0),
+          // ক্যামেরা প্রিভিউ
+          Positioned.fill(
+            child: CameraPreview(_controller!),
+          ),
+          
+          // ওপরের দিকে ফ্ল্যাশ এবং সেটিংস আইকন (ডেকোরেশনের জন্য)
+          SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(20.0),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: const [
+                  Icon(Icons.flash_on, color: Colors.white),
+                  Icon(Icons.settings, color: Colors.white),
+                ],
+              ),
+            ),
+          ),
+
+          // নিচের দিকে ক্যাপচার বাটন
+          Positioned(
+            bottom: 40,
+            left: 0,
+            right: 0,
             child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceEvenly,
               children: [
-                Expanded(
-                  child: TextField(
-                    controller: _textController,
-                    decoration: InputDecoration(
-                      hintText: 'নতুন কাজ লিখুন...',
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(10),
-                      ),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 16),
+                // গ্যালারি আইকন (ডেমো)
+                Container(
+                  width: 50,
+                  height: 50,
+                  decoration: BoxDecoration(
+                    border: Border.all(color: Colors.white, width: 2),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: const Icon(Icons.photo, color: Colors.white),
+                ),
+                
+                // শাটার বাটন
+                GestureDetector(
+                  onTap: _takePicture,
+                  child: Container(
+                    height: 80,
+                    width: 80,
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      border: Border.all(color: Colors.white, width: 4),
                     ),
-                    onSubmitted: (_) => _addTask(), // কিবোর্ড থেকে এন্টার দিলেও যোগ হবে
+                    child: Center(
+                      child: Container(
+                        height: 60,
+                        width: 60,
+                        decoration: const BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                const SizedBox(width: 10),
-                ElevatedButton(
-                  onPressed: _addTask,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.deepPurple,
-                    foregroundColor: Colors.white,
-                    padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(10),
-                    )
-                  ),
-                  child: const Text('যোগ করুন', style: TextStyle(fontSize: 16)),
+                
+                // ক্যামেরা পরিবর্তন করার আইকন
+                IconButton(
+                  icon: const Icon(Icons.cameraswitch, color: Colors.white, size: 30),
+                  onPressed: () {
+                    // এখানে ক্যামেরা পরিবর্তনের লজিক বসবে
+                  },
                 ),
               ],
             ),
           ),
-          
-          // টাস্ক লিস্ট দেখানোর জায়গা
-          Expanded(
-            child: _tasks.isEmpty
-                ? const Center(
-                    child: Text(
-                      'এখনো কোনো কাজ যোগ করা হয়নি!',
-                      style: TextStyle(fontSize: 18, color: Colors.grey),
-                    ),
-                  )
-                : ListView.builder(
-                    itemCount: _tasks.length,
-                    itemBuilder: (context, index) {
-                      return Card(
-                        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                        elevation: 2,
-                        child: ListTile(
-                          leading: Checkbox(
-                            value: _tasks[index]['isDone'],
-                            activeColor: Colors.deepPurple,
-                            onChanged: (bool? value) {
-                              setState(() {
-                                _tasks[index]['isDone'] = value!;
-                              });
-                            },
-                          ),
-                          title: Text(
-                            _tasks[index]['title'],
-                            style: TextStyle(
-                              fontSize: 18,
-                              decoration: _tasks[index]['isDone']
-                                  ? TextDecoration.lineThrough // কাজ শেষ হলে কাটা দাগ পড়বে
-                                  : TextDecoration.none,
-                              color: _tasks[index]['isDone'] ? Colors.grey : Colors.black,
-                            ),
-                          ),
-                          trailing: IconButton(
-                            icon: const Icon(Icons.delete, color: Colors.red),
-                            onPressed: () => _deleteTask(index),
-                          ),
-                        ),
-                      );
+
+          // ছবি তোলার পর সেই ছবি স্ক্রিনে দেখানোর জন্য
+          if (_imageFile != null)
+            Positioned.fill(
+              child: Scaffold(
+                backgroundColor: Colors.black,
+                appBar: AppBar(
+                  backgroundColor: Colors.black,
+                  leading: IconButton(
+                    icon: const Icon(Icons.close, color: Colors.white),
+                    onPressed: () {
+                      setState(() {
+                        _imageFile = null; // ছবি বন্ধ করে আবার ক্যামেরায় ফিরবে
+                      });
                     },
                   ),
-          ),
+                  title: const Text('ছবি দেখুন'),
+                  actions: [
+                    IconButton(
+                      icon: const Icon(Icons.check, color: Colors.white),
+                      onPressed: () {
+                        // এখানে ছবি সেভ করার লজিক বসবে
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('ছবি সেভ করা হয়েছে!')),
+                        );
+                        setState(() {
+                          _imageFile = null;
+                        });
+                      },
+                    )
+                  ],
+                ),
+                body: Center(
+                  child: Image.file(File(_imageFile!.path)),
+                ),
+              ),
+            ),
         ],
       ),
     );
