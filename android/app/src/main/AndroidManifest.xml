@@ -1,0 +1,22 @@
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.example.wevlo_flutter_app">
+
+    <!-- এখানে আপনার পারমিশনগুলো বসান -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+    <uses-permission android:name="android.permission.READ_MEDIA_IMAGES" />
+    <uses-permission android:name="android.permission.READ_MEDIA_VIDEO" />
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" />
+
+    <queries>
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+        </intent>
+    </queries>
+    <!-- পারমিশন শেষ -->
+
+    <application
+        android:label="আপনার_অ্যাপের_নাম" 
+        android:icon="@mipmap/ic_launcher">
+        <!-- ... বাকি কোড ... -->
+    </application>
+</manifest>
