@@ -7,11 +7,10 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
-  
-  # ক্যামেরা অ্যাপের জন্য নতুন যোগ করা প্যাকেজসমূহ
   camera: ^0.10.5+9
   path_provider: ^2.1.2
   path: ^1.8.3
+  gal: ^2.3.0  # ছবি গ্যালারিতে সেভ করার জন্য নতুন প্যাকেজ
 
 flutter:
   uses-material-design: true
